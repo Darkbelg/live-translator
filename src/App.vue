@@ -54,33 +54,11 @@ export default {
 
       // When the audio recording stops, send the audio data to the API and create a URL for the audio file
       this.capturedAudio.onstop = () => {
-        const formData = new FormData();
-        formData.append('model', 'whisper-1');
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        formData.append('file', audioBlob, 'recording.webm');
-        // formData.append('tranlsations','Chinese');
-        fetch('https://api.openai.com/v1/audio/translations', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer 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',
-          },
-          body: formData,
-        })
-          .then(response => response.json())
-          .then(data => {
-            console.log('Tranlsations:', data);
-          })
-          .catch(error => {
-            console.error('Error:', error);
-          });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        this.audioUrl = audioUrl;
-        this.capturedAudio = null;
+        this.sendAudioToAPI(audioChunks);
       };
 
       // Start recording audio
       this.capturedAudio.start();
-
     },
     stopCapture() {
       console.log('stop Capture');
@@ -103,6 +81,30 @@ export default {
           this.audioPlaying = false;
         };
       }
+    },
+    sendAudioToAPI(audioChunks) {
+      const formData = new FormData();
+      formData.append('model', 'whisper-1');
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      formData.append('file', audioBlob, 'recording.webm');
+      // formData.append('tranlsations','Chinese');
+      fetch('https://api.openai.com/v1/audio/translations', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer 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',
+        },
+        body: formData,
+      })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Tranlsations:', data);
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      this.audioUrl = audioUrl;
+      this.capturedAudio = null;
     },
   },
 };
