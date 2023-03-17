@@ -3,18 +3,18 @@
     <video ref="videoElement" width="640" height="480" autoplay muted></video>
     <button v-if="!mediaStream" @click="startCapture">Start Capture</button>
     <button v-if="mediaStream" @click="stopCapture">Stop Capture</button>
-    <button v-if="audioUrl" :disabled="audioPlaying" @click="playAudio">Play Audio</button>
+    {{ translation }}
   </div>
 </template>
-
 <script>
 export default {
   data() {
     return {
       mediaStream: null,
       capturedAudio: null,
-      audioUrl: null,
       audioPlaying: false,
+      intervalId: null, // Keep track of the interval id
+      translation: "",
     };
   },
   methods: {
@@ -48,17 +48,23 @@ export default {
       };
       this.capturedAudio = new MediaRecorder(audioStream, audioRecorderOptions);
 
-      // Create an array to store audio data chunks
-      const audioChunks = [];
-      this.capturedAudio.ondataavailable = e => audioChunks.push(e.data);
-
-      // When the audio recording stops, send the audio data to the API and create a URL for the audio file
-      this.capturedAudio.onstop = () => {
-        this.sendAudioToAPI(audioChunks);
-      };
-
       // Start recording audio
       this.capturedAudio.start();
+      console.log('start');
+
+      // Set an interval to stop recording after 10 seconds
+      this.intervalId = setInterval(() => {
+        this.capturedAudio.stop();
+        console.log('stop');
+      }, 5000);
+
+      this.capturedAudio.ondataavailable = e => {
+        console.log("restart");
+        this.sendAudioToAPI(e.data);
+
+        // Start a new recording after 10 seconds
+        this.capturedAudio.start();
+      };
     },
     stopCapture() {
       console.log('stop Capture');
@@ -67,25 +73,20 @@ export default {
         this.mediaStream = null;
       }
       if (this.capturedAudio) {
+        this.capturedAudio.ondataavailable = null; // Remove the event listener
         this.capturedAudio.stop();
         this.capturedAudio = null;
       }
-      this.$refs.videoElement.srcObject = null;
-    },
-    playAudio() {
-      if (this.audioUrl) {
-        const audio = new Audio(this.audioUrl);
-        audio.play();
-        this.audioPlaying = true;
-        audio.onended = () => {
-          this.audioPlaying = false;
-        };
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
       }
+      this.$refs.videoElement.srcObject = null;
     },
     sendAudioToAPI(audioChunks) {
       const formData = new FormData();
       formData.append('model', 'whisper-1');
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const audioBlob = new Blob([audioChunks], { type: 'audio/webm' });
       formData.append('file', audioBlob, 'recording.webm');
       // formData.append('tranlsations','Chinese');
       fetch('https://api.openai.com/v1/audio/translations', {
@@ -98,13 +99,11 @@ export default {
         .then(response => response.json())
         .then(data => {
           console.log('Tranlsations:', data);
+          this.translation = data.text;
         })
         .catch(error => {
           console.error('Error:', error);
         });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      this.audioUrl = audioUrl;
-      this.capturedAudio = null;
     },
   },
 };
