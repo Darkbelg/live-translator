@@ -3,7 +3,11 @@
     <video ref="videoElement" width="640" height="480" autoplay muted></video>
     <button v-if="!mediaStream" @click="startCapture">Start Capture</button>
     <button v-if="mediaStream" @click="stopCapture">Stop Capture</button>
-    {{ translation }}
+    <ul>
+      <li v-for="line,index in translation" v-bind:key="index">
+        {{ line }}
+      </li>
+    </ul>
   </div>
 </template>
 <script>
@@ -14,7 +18,9 @@ export default {
       capturedAudio: null,
       audioPlaying: false,
       intervalId: null, // Keep track of the interval id
-      translation: "",
+      intervalSend: null,
+      translation: [],
+      audioChunksArray:[]
     };
   },
   methods: {
@@ -52,22 +58,26 @@ export default {
       this.capturedAudio.start();
       console.log('start');
 
-      // Set an interval to stop recording after 10 seconds
+      // Set an interval to stop recording after 1 seconds
       this.intervalId = setInterval(() => {
         this.capturedAudio.stop();
+        // console.log(this.audioChunksArray.slice(-20));
+        this.sendAudioToAPI();
         console.log('stop');
-      }, 5000);
+      }, 1000);
+
 
       this.capturedAudio.ondataavailable = e => {
         console.log("restart");
-        this.sendAudioToAPI(e.data);
-
+        this.audioChunksArray.push(e.data);
+          // console.log( this.audioChunksArray);
         // Start a new recording after 10 seconds
         this.capturedAudio.start();
       };
     },
     stopCapture() {
       console.log('stop Capture');
+      
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach((track) => track.stop());
         this.mediaStream = null;
@@ -83,28 +93,29 @@ export default {
       }
       this.$refs.videoElement.srcObject = null;
     },
-    sendAudioToAPI(audioChunks) {
-      const formData = new FormData();
-      formData.append('model', 'whisper-1');
-      const audioBlob = new Blob([audioChunks], { type: 'audio/webm' });
-      formData.append('file', audioBlob, 'recording.webm');
-      // formData.append('tranlsations','Chinese');
-      fetch('https://api.openai.com/v1/audio/translations', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer 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',
-        },
-        body: formData,
-      })
-        .then(response => response.json())
-        .then(data => {
-          console.log('Tranlsations:', data);
-          this.translation = data.text;
+    sendAudioToAPI() {
+        const mergedAudioBlob = new Blob(this.audioChunksArray, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('model', 'whisper-1');
+        formData.append('file', mergedAudioBlob, 'recording.webm');
+
+        fetch('https://api.openai.com/v1/audio/translations', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer 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',
+          },
+          body: formData,
         })
-        .catch(error => {
-          console.error('Error:', error);
-        });
+          .then(response => response.json())
+          .then(data => {
+            console.log('Translations:', data);
+            this.translation.unshift(data.text);
+          })
+          .catch(error => {
+            console.error('Error:', error);
+          });
+          this.audioChunksArray = this.audioChunksArray.splice(-6);
+      }
     },
-  },
 };
 </script>
