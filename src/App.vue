@@ -1,10 +1,12 @@
 <template>
   <div>
+    <label for="apiKey">API Key:</label>
+    <input id="apiKey" type="text" v-model="apiKey">
     <video ref="videoElement" width="640" height="480" autoplay muted></video>
     <button v-if="!mediaStream" @click="startCapture">Start Capture</button>
     <button v-if="mediaStream" @click="stopCapture">Stop Capture</button>
     <ul>
-      <li v-for="line,index in translation" v-bind:key="index">
+      <li v-for="line, index in translation" v-bind:key="index">
         {{ line }}
       </li>
     </ul>
@@ -20,11 +22,13 @@ export default {
       intervalId: null, // Keep track of the interval id
       intervalSend: null,
       translation: [],
-      audioChunksArray:[]
+      audioChunksArray: [],
+      apiKey: localStorage.getItem('apiKey') || '',
     };
   },
   methods: {
     async startCapture() {
+      this.translation = [];
       const displayMediaOptions = {
         audio: true,
         video: true,
@@ -64,20 +68,19 @@ export default {
         // console.log(this.audioChunksArray.slice(-20));
         this.sendAudioToAPI();
         console.log('stop');
-      }, 1000);
+      }, 6000);
 
 
       this.capturedAudio.ondataavailable = e => {
         console.log("restart");
         this.audioChunksArray.push(e.data);
-          // console.log( this.audioChunksArray);
-        // Start a new recording after 10 seconds
+        // console.log( this.audioChunksArray);
         this.capturedAudio.start();
       };
     },
     stopCapture() {
       console.log('stop Capture');
-      
+
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach((track) => track.stop());
         this.mediaStream = null;
@@ -94,28 +97,33 @@ export default {
       this.$refs.videoElement.srcObject = null;
     },
     sendAudioToAPI() {
-        const mergedAudioBlob = new Blob(this.audioChunksArray, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append('model', 'whisper-1');
-        formData.append('file', mergedAudioBlob, 'recording.webm');
+      const mergedAudioBlob = new Blob(this.audioChunksArray, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('model', 'whisper-1');
+      formData.append('file', mergedAudioBlob, 'recording.webm');
 
-        fetch('https://api.openai.com/v1/audio/translations', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer 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',
-          },
-          body: formData,
+      fetch('https://api.openai.com/v1/audio/translations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: formData,
+      })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Translations:', data);
+          this.translation.unshift(data.text);
         })
-          .then(response => response.json())
-          .then(data => {
-            console.log('Translations:', data);
-            this.translation.unshift(data.text);
-          })
-          .catch(error => {
-            console.error('Error:', error);
-          });
-          this.audioChunksArray = this.audioChunksArray.splice(-6);
-      }
+        .catch(error => {
+          console.error('Error:', error);
+        });
+      this.audioChunksArray = [];
     },
+  },
+  watch: {
+    apiKey: function (newApiKey) {
+      localStorage.setItem('apiKey', newApiKey);
+    }
+  }
 };
 </script>
