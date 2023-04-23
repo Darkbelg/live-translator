@@ -7,7 +7,7 @@
     <button v-if="mediaStream" @click="stopCapture">Stop Capture</button>
     <ul>
       <li v-for="line, index in translation" v-bind:key="index">
-        {{ line }}
+        {{ line.callNumber }}: {{ line.text }}
       </li>
     </ul>
   </div>
@@ -24,6 +24,7 @@ export default {
       translation: [],
       audioChunksArray: [],
       apiKey: localStorage.getItem('apiKey') || '',
+      callCounter: 0,
     };
   },
   methods: {
@@ -65,10 +66,9 @@ export default {
       // Set an interval to stop recording after 1 seconds
       this.intervalId = setInterval(() => {
         this.capturedAudio.stop();
-        // console.log(this.audioChunksArray.slice(-20));
         this.sendAudioToAPI();
         console.log('stop');
-      }, 6000);
+      }, 5000);
 
 
       this.capturedAudio.ondataavailable = e => {
@@ -101,6 +101,16 @@ export default {
       const formData = new FormData();
       formData.append('model', 'whisper-1');
       formData.append('file', mergedAudioBlob, 'recording.webm');
+      // formData.append('temperature', '0.5');
+      
+      // Append all previous translations to the new call
+      if(this.translation.length > 0){
+        formData.append('prompt', this.translation.map(t => t.text).join(' '));
+      }
+
+      // Increment the callCounter
+      this.callCounter += 1;
+      const currentCallNumber = this.callCounter;
 
       fetch('https://api.openai.com/v1/audio/translations', {
         method: 'POST',
@@ -112,7 +122,7 @@ export default {
         .then(response => response.json())
         .then(data => {
           console.log('Translations:', data);
-          this.translation.unshift(data.text);
+          this.translation.unshift({ text: data.text, callNumber: currentCallNumber });
         })
         .catch(error => {
           console.error('Error:', error);
